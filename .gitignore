@@ -1,0 +1,35 @@
+# Unity generated
+Library/
+Temp/
+Obj/
+Logs/
+MemoryCaptures/
+Recordings/
+UserSettings/
+
+# Build output
+Build/
+Builds/
+*.x86_64
+*.x86
+*.exe
+*.app
+*_Data/
+*_DoNotShip/
+UnityPlayer.so
+UnityPlayer.dll
+
+# Crash dumps
+mono_crash.mem.*
+*.blob
+
+# VS / Rider
+.vs/
+.idea/
+*.suo
+*.userprefs
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
