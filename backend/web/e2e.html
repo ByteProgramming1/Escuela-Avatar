@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Prueba de voz E2E</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f7; --panel: #ffffff; --tile: #f5f5f7;
+    --ink: #1d1d1f; --muted: #6e6e73; --line: rgba(0, 0, 0, .1);
+    --fill: rgba(120, 120, 128, .12); --fill-hover: rgba(120, 120, 128, .2); --seg-on: #ffffff;
+    --accent: #0071e3; --accent-ink: #ffffff; --rec: #ff3b30;
+    --ok: #30b350; --warn: #ff9f0a; --bad: #d70015; --bad-bg: rgba(255, 59, 48, .1);
+    --ring: color-mix(in srgb, var(--accent) 45%, transparent);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .04);
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000; --panel: #1c1c1e; --tile: #2c2c2e;
+      --ink: #f5f5f7; --muted: #98989d; --line: rgba(255, 255, 255, .14);
+      --fill: rgba(120, 120, 128, .28); --fill-hover: rgba(120, 120, 128, .4); --seg-on: #636366;
+      --accent: #2997ff; --accent-ink: #ffffff; --rec: #ff453a;
+      --ok: #30d158; --warn: #ff9f0a; --bad: #ff6961; --bad-bg: rgba(255, 69, 58, .16);
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 400 17px/1.47 var(--sans); letter-spacing: -.022em; -webkit-font-smoothing: antialiased; }
+  main { max-width: 820px; margin: 0 auto; padding: 56px 20px 96px; }
+  code { font: 14px var(--mono); letter-spacing: 0; background: var(--fill); border-radius: 6px; padding: 1px 6px; }
+
+  .eyebrow { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: var(--accent); letter-spacing: -.01em; }
+  h1 { font: 600 clamp(34px, 6vw, 48px)/1.08 var(--display); letter-spacing: -.028em; margin: 0 0 12px; }
+  .sub { margin: 0 0 36px; max-width: 620px; font-size: 19px; line-height: 1.42; color: var(--muted); letter-spacing: -.016em; }
+
+  .panel { background: var(--panel); border-radius: 18px; box-shadow: var(--shadow); margin-bottom: 20px; }
+  :focus-visible { outline: 4px solid var(--ring); outline-offset: 1px; }
+
+  /* Configuración: lista agrupada, como Ajustes */
+  .list { padding: 0 20px; }
+  .item { display: flex; align-items: center; justify-content: space-between; gap: 8px 20px; flex-wrap: wrap; padding: 13px 0; min-height: 52px; }
+  .item + .item { border-top: .5px solid var(--line); }
+  .item > label, .item > .lbl { font-size: 16px; }
+  input[type=text], select { font: 16px var(--sans); letter-spacing: -.016em; color: var(--ink); background: var(--fill); border: 0; border-radius: 10px; padding: 8px 12px; min-width: 0; }
+  input[type=text] { flex: 1 1 220px; max-width: 320px; text-align: right; }
+  select { -webkit-appearance: none; appearance: none; padding-right: 32px; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='14' viewBox='0 0 10 14' fill='none' stroke='%238e8e93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 5.5 5 2.5 8 5.5M2 8.5 5 11.5 8 8.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 11px center; }
+  .seg { display: inline-flex; padding: 2px; background: var(--fill); border-radius: 9px; }
+  .seg button { font: 500 14px var(--sans); letter-spacing: -.01em; color: var(--ink); background: transparent; border: 0; border-radius: 7px; padding: 5px 18px; cursor: pointer; transition: background .2s, box-shadow .2s; }
+  .seg button[aria-pressed=true] { background: var(--seg-on); box-shadow: 0 1px 1px rgba(0, 0, 0, .06), 0 2px 6px rgba(0, 0, 0, .12); }
+  .status { justify-content: flex-start; flex-wrap: nowrap; font-size: 14px; color: var(--muted); }
+  .status #conn { flex: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; transition: background .3s; }
+  .dot.on { background: var(--ok); } .dot.off { background: var(--bad); }
+  .chain { margin-left: auto; font: 12px var(--mono); letter-spacing: 0; text-align: right; overflow-wrap: anywhere; }
+
+  /* Grabadora */
+  .recorder { padding: 36px 20px 28px; text-align: center; }
+  button { font: inherit; letter-spacing: inherit; }
+  #rec { display: grid; place-items: center; width: 88px; height: 88px; margin: 0 auto 20px; border-radius: 50%; padding: 0; border: 0; cursor: pointer; background: var(--accent); color: var(--accent-ink);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent); transition: transform .15s ease, background .25s, box-shadow .25s; }
+  #rec svg { width: 34px; height: 34px; }
+  #rec:hover:not(:disabled) { transform: scale(1.04); }
+  #rec:active:not(:disabled) { transform: scale(.95); }
+  #rec.recording { background: var(--rec); box-shadow: 0 0 0 0 color-mix(in srgb, var(--rec) 40%, transparent); animation: pulse 1.6s ease-out infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--rec) 40%, transparent); } 100% { box-shadow: 0 0 0 22px color-mix(in srgb, var(--rec) 0%, transparent); } }
+  #recState { display: block; font-size: 19px; font-weight: 600; letter-spacing: -.02em; }
+  #timer { display: block; min-height: 22px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .meter { width: min(260px, 70%); height: 4px; margin: 12px auto 0; background: var(--fill); border-radius: 2px; overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width 60ms linear, background .25s; }
+  .is-recording .meter i { background: var(--rec); }
+  .hint { color: var(--muted); font-size: 14px; margin: 22px 0 0; }
+  kbd { font: 500 12px var(--sans); letter-spacing: 0; color: var(--ink); border-radius: 5px; padding: 1px 7px 2px; background: var(--tile); box-shadow: 0 0 0 .5px var(--line), 0 1px 0 var(--line); }
+  .tools { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .pill { font-size: 15px; color: var(--accent); background: var(--fill); border: 0; border-radius: 980px; padding: 8px 18px; cursor: pointer; transition: background .2s; }
+  .pill:hover:not(:disabled) { background: var(--fill-hover); }
+  .pill:disabled { opacity: .4; cursor: default; }
+  .alert { margin: 20px auto 0; max-width: 560px; padding: 11px 16px; border-radius: 12px; background: var(--bad-bg); color: var(--bad); font-size: 15px; text-align: left; }
+
+  /* Resultados */
+  .turn { padding: 22px 24px 20px; animation: rise .35s cubic-bezier(.2, .8, .2, 1); }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+  .turn header { display: flex; gap: 4px 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+  .who { font: 600 21px var(--display); letter-spacing: -.022em; }
+  .tag { font-size: 13px; color: var(--muted); }
+  .state { margin-left: auto; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .state::before { content: ""; display: none; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+  .state.busy::before { display: inline-block; width: 12px; height: 12px; margin-right: 8px; vertical-align: -2px; background: none; border: 2px solid var(--fill-hover); border-top-color: var(--muted); animation: spin .8s linear infinite; }
+  .state.done::before { display: inline-block; background: var(--ok); }
+  .state.err { color: var(--bad); }
+  .state.err::before { display: inline-block; background: var(--bad); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .block { margin: 18px 0 0; }
+  .block h3 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 4px; letter-spacing: -.006em; }
+  .block p { margin: 0; white-space: pre-wrap; }
+  .block p.qmeta { margin-top: 4px; }
+  .block p.empty { color: var(--muted); }
+  audio { display: block; width: 100%; height: 40px; margin-top: 8px; }
+  .group { font-size: 13px; font-weight: 600; color: var(--muted); margin: 24px 0 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+  .stat { background: var(--tile); border-radius: 12px; padding: 12px 14px; }
+  .stat b { display: block; font: 600 21px/1.2 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat span { display: block; margin-top: 2px; font-size: 12px; line-height: 1.3; color: var(--muted); letter-spacing: -.004em; }
+  .checks { list-style: none; padding: 0; margin: 24px 0 0; background: var(--tile); border-radius: 12px; overflow: hidden; }
+  .checks li { display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px; font-size: 15px; line-height: 1.4; }
+  .checks li + li { border-top: .5px solid var(--line); }
+  .checks .ico { flex: none; width: 20px; height: 20px; margin-top: 1px; }
+  .checks .ok .ico { color: var(--ok); } .checks .warn .ico { color: var(--warn); }
+  .ico path { stroke: var(--panel); }
+  .ico circle.dotmark { fill: var(--panel); }
+  .turn footer { margin-top: 20px; padding-top: 16px; border-top: .5px solid var(--line); display: flex; gap: 12px 18px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  a.btn { font-size: 15px; color: var(--accent); text-decoration: none; }
+  a.btn::after { content: " \203A"; }
+  a.btn:hover { text-decoration: underline; }
+  .empty-state { text-align: center; color: var(--muted); padding: 40px 0; font-size: 17px; }
+
+  @media (max-width: 560px) {
+    main { padding: 36px 16px 72px; }
+    .sub { font-size: 17px; margin-bottom: 28px; }
+    input[type=text] { max-width: none; text-align: left; flex-basis: 100%; }
+    .chain { flex-basis: 100%; margin-left: 0; text-align: left; }
+    .status { flex-wrap: wrap; }
+    .turn { padding: 18px 16px 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #rec.recording, .turn, .state.busy::before { animation: none; }
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Prueba de punta a punta</p>
+  <h1>Prueba de voz</h1>
+  <p class="sub">Habla con tu micrófono y escucha la respuesta con la voz clonada, por el mismo camino que usa Unity (<code>/audio/stream</code>).</p>
+
+  <section class="panel list" aria-label="Configuración">
+    <div class="item">
+      <label for="server">Servidor</label>
+      <input type="text" id="server" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="item">
+      <span class="lbl" id="whoLabel">Quién responde</span>
+      <div class="seg" id="speakers" role="group" aria-labelledby="whoLabel"></div>
+    </div>
+    <div class="item">
+      <label for="mode">Modo</label>
+      <select id="mode">
+        <option value="stream">Streaming (como Unity)</option>
+        <option value="full">Completo (/audio)</option>
+      </select>
+    </div>
+    <div class="item status"><span class="dot" id="dot"></span><span id="conn">Conectando…</span><span class="chain" id="chain"></span></div>
+  </section>
+
+  <section class="panel recorder" aria-label="Grabadora">
+    <button id="rec" aria-label="Grabar pregunta" title="Grabar / enviar (Espacio)"></button>
+    <span id="recState">Pulsa para grabar tu pregunta</span>
+    <span id="timer"></span>
+    <div class="meter" aria-hidden="true"><i id="level"></i></div>
+    <p class="hint"><kbd>Espacio</kbd> graba y envía &nbsp;·&nbsp; <kbd>Esc</kbd> descarta la grabación</p>
+    <div class="tools">
+      <button type="button" class="pill" id="pick">Usar un archivo de audio…</button>
+      <input type="file" id="file" accept="audio/*" hidden>
+      <button type="button" class="pill" id="reset" title="POST /reset: el asistente olvida las preguntas anteriores">Olvidar conversación</button>
+    </div>
+    <div class="alert" id="alert" role="alert" hidden></div>
+  </section>
+
+  <div id="turns"><p class="empty-state" id="none">Aún no hay preguntas. Graba la primera.</p></div>
+</main>
+
+<script>
+"use strict";
+
+// Mismas constantes que el resto del proyecto: colchón de Unity (VoiceAssistant.streamPrebufferBytes),
+// bitrate del MP3 (mp3_24000_48) y objetivo de latencia de scripts/e2e_voice.py.
+const PREBUFFER_BYTES = 7000;
+const MP3_BYTES_PER_SECOND = 48000 / 8;
+const FIRST_AUDIO_GOAL_S = 4.0;
+const PLAYING_TIMEOUT_MS = 4000; // cuánto se espera al evento "playing" antes de dar la medición por cerrada
+const NAMES = { rectora: "Rectora", oswaldo: "Oswaldo" };
+
+// Iconos en SVG (sin emojis). Heredan el color con currentColor; el trazo interior lo pone el CSS (.ico path).
+const SVG = (inner, box = 24) => `<svg viewBox="0 0 ${box} ${box}" aria-hidden="true">${inner}</svg>`;
+const ICON = {
+  mic: SVG(`<rect x="9" y="2.5" width="6" height="12" rx="3" fill="currentColor"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>`),
+  stop: SVG(`<rect x="6.5" y="6.5" width="11" height="11" rx="3" fill="currentColor"/>`),
+  ok: `<svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10" fill="currentColor"/><path d="M5.8 10.4l2.7 2.7 5.7-5.9" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  warn: `<svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10" fill="currentColor"/><path d="M10 5.2v5.6" fill="none" stroke-width="1.9" stroke-linecap="round"/><circle class="dotmark" cx="10" cy="14.2" r="1.15"/></svg>`,
+};
+
+const $ = (sel) => document.querySelector(sel);
+const rec = { recorder: null, stream: null, ctx: null, raf: 0, startedAt: 0, stoppedAt: 0, discard: false };
+let speaker = "rectora";
+let health = null;
+
+// ── Utilidades ───────────────────────────────────────────────────────────────────────────────
+
+const serverUrl = () => $("#server").value.trim().replace(/\/+$/, "");
+const secs = (ms) => (ms / 1000).toFixed(2) + " s";
+const clock = () => new Date().toLocaleTimeString("es-CO", { hour12: false });
+const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+
+function showAlert(msg) { const a = $("#alert"); a.textContent = msg || ""; a.hidden = !msg; }
+
+function audioContext() {
+  rec.ctx ||= new AudioContext();
+  if (rec.ctx.state === "suspended") rec.ctx.resume();
+  return rec.ctx;
+}
+
+/** Float32 mono → WAV PCM de 16 bits, el mismo formato que envía WavUtility desde Unity. */
+function encodeWav(samples, rate) {
+  const view = new DataView(new ArrayBuffer(44 + samples.length * 2));
+  const text = (at, s) => [...s].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+  text(0, "RIFF"); view.setUint32(4, 36 + samples.length * 2, true); text(8, "WAVEfmt ");
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  text(36, "data"); view.setUint32(40, samples.length * 2, true);
+  samples.forEach((x, i) => view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, x)) * 0x7fff, true));
+  return new Blob([view], { type: "audio/wav" });
+}
+
+/** Cualquier audio que el navegador sepa decodificar (webm/opus del micrófono, m4a, mp3…) → WAV mono. */
+async function toWav(blob) {
+  const decoded = await audioContext().decodeAudioData(await blob.arrayBuffer());
+  const mono = new Float32Array(decoded.length);
+  for (let c = 0; c < decoded.numberOfChannels; c++) {
+    const data = decoded.getChannelData(c);
+    for (let i = 0; i < mono.length; i++) mono[i] += data[i] / decoded.numberOfChannels;
+  }
+  const peak = mono.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+  return { wav: encodeWav(mono, decoded.sampleRate), peak, seconds: decoded.duration };
+}
+
+/** Port de playback_gaps() de scripts/e2e_voice.py: simula el colchón de Unity sobre las llegadas reales de trozos. */
+function playbackGaps(arrivals) {
+  let got = 0, started = false, bufferEnd = 0, gaps = 0, silence = 0, slack = Infinity;
+  for (const [t, size] of arrivals) {
+    got += size;
+    const dur = size / MP3_BYTES_PER_SECOND;
+    if (!started) {
+      bufferEnd = Math.max(bufferEnd, t) + dur;
+      if (got >= PREBUFFER_BYTES) { started = true; bufferEnd = t + got / MP3_BYTES_PER_SECOND; }
+    } else if (t > bufferEnd) {
+      gaps++; silence += t - bufferEnd; slack = 0; bufferEnd = t + dur;
+    } else {
+      slack = Math.min(slack, bufferEnd - t); bufferEnd += dur;
+    }
+  }
+  return { gaps, silence, slack };
+}
+
+/** Arranca `audio` y devuelve cuántos ms después de `t0` empezó a sonar de verdad (null si no lo hizo a tiempo). */
+function playAndTime(audio, t0) {
+  const heard = new Promise((resolve) => {
+    audio.addEventListener("playing", () => resolve(performance.now() - t0), { once: true });
+    setTimeout(() => resolve(null), PLAYING_TIMEOUT_MS);
+  });
+  audio.play().catch(() => showAlert("El navegador bloqueó la reproducción automática: pulsa reproducir en la respuesta."));
+  return heard;
+}
+
+// ── Servidor: estado y personajes ────────────────────────────────────────────────────────────
+
+function renderSpeakers(list) {
+  const rank = (id) => (id in NAMES ? Object.keys(NAMES).indexOf(id) : Object.keys(NAMES).length);
+  $("#speakers").replaceChildren(...[...list].sort((a, b) => rank(a) - rank(b)).map((id) => {
+    const b = el("button", { type: "button", textContent: NAMES[id] || id });
+    b.setAttribute("aria-pressed", id === speaker);
+    b.onclick = () => { speaker = id; renderSpeakers(list); refreshChain(); };
+    return b;
+  }));
+}
+
+function refreshChain() {
+  const p = health?.providers || {};
+  $("#chain").textContent = health ? `STT ${p.stt} · LLM ${p.llm} · voz ${p[`tts[${speaker}]`]}` : "";
+}
+
+async function checkHealth() {
+  try {
+    health = await (await fetch(serverUrl() + "/health", { cache: "no-store" })).json();
+    $("#dot").className = "dot on";
+    $("#conn").textContent = "Servidor listo";
+    if (!health.speakers.includes(speaker)) speaker = health.speakers[0];
+    renderSpeakers(health.speakers);
+    refreshChain();
+  } catch {
+    health = null;
+    $("#dot").className = "dot off";
+    $("#conn").textContent = `Sin conexión con ${serverUrl()}. ¿Está arrancado uvicorn?`;
+    $("#chain").textContent = "";
+  }
+}
+
+// ── Grabación ────────────────────────────────────────────────────────────────────────────────
+
+function drawLevel(analyser, buf) {
+  analyser.getFloatTimeDomainData(buf);
+  const rms = Math.sqrt(buf.reduce((s, x) => s + x * x, 0) / buf.length);
+  const db = 20 * Math.log10(rms + 1e-9);
+  $("#level").style.width = Math.max(0, Math.min(100, ((db + 60) / 60) * 100)) + "%";
+  $("#timer").textContent = ((performance.now() - rec.startedAt) / 1000).toFixed(1) + " s";
+  rec.raf = requestAnimationFrame(() => drawLevel(analyser, buf));
+}
+
+function setRecording(on) {
+  const btn = $("#rec");
+  btn.classList.toggle("recording", on);
+  document.body.classList.toggle("is-recording", on);
+  btn.innerHTML = on ? ICON.stop : ICON.mic;
+  btn.setAttribute("aria-label", on ? "Detener y enviar" : "Grabar pregunta");
+  $("#recState").textContent = on ? "Grabando… pulsa de nuevo para enviar" : "Pulsa para grabar tu pregunta";
+  if (!on) { cancelAnimationFrame(rec.raf); $("#level").style.width = "0"; $("#timer").textContent = ""; }
+}
+
+async function startRecording() {
+  showAlert("");
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return showAlert("Este navegador no da acceso al micrófono aquí. Abre la página como http://localhost:5000/e2e o http://127.0.0.1:5000/e2e (no por la IP de la red).");
+  }
+  document.querySelectorAll("audio").forEach((a) => a.pause()); // hablar corta lo que esté sonando
+  try {
+    // Sin cancelación de eco, supresión de ruido ni control de ganancia: audio crudo, como el del micrófono de Unity.
+    rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch (e) {
+    return showAlert(e.name === "NotAllowedError" ? "Permiso de micrófono denegado: permítelo en el candado de la barra de direcciones." : `No se pudo abrir el micrófono: ${e.message}`);
+  }
+  const chunks = [];
+  rec.discard = false;
+  rec.recorder = new MediaRecorder(rec.stream);
+  rec.recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  rec.recorder.onstop = () => {
+    rec.stream.getTracks().forEach((t) => t.stop());
+    rec.recorder = null;
+    if (!rec.discard) submit(new Blob(chunks, { type: chunks[0]?.type }), rec.stoppedAt);
+  };
+  const analyser = audioContext().createAnalyser();
+  analyser.fftSize = 1024;
+  audioContext().createMediaStreamSource(rec.stream).connect(analyser);
+  rec.startedAt = performance.now();
+  rec.recorder.start();
+  setRecording(true);
+  drawLevel(analyser, new Float32Array(analyser.fftSize));
+}
+
+function stopRecording(discard = false) {
+  if (!rec.recorder) return;
+  rec.discard = discard;
+  rec.stoppedAt = performance.now();
+  rec.recorder.stop();
+  setRecording(false);
+}
+
+const toggleRecording = () => (rec.recorder ? stopRecording() : startRecording());
+
+// ── Reproducción del MP3 en streaming ────────────────────────────────────────────────────────
+
+/** Recibe trozos de MP3 y los reproduce según llegan (MediaSource). Si el navegador no puede, junta todo y suena al final.
+ *  Como Unity, no empieza hasta tener PREBUFFER_BYTES (o hasta que termine el stream, si la respuesta es corta). */
+function createStreamPlayer(audio, t0) {
+  const live = "MediaSource" in window && MediaSource.isTypeSupported("audio/mpeg");
+  const chunks = [], queue = [];
+  let received = 0, started = false, finished = false, sb = null, ms = null, heard = Promise.resolve(null);
+
+  const start = () => { if (!started) { started = true; heard = playAndTime(audio, t0); } };
+  const pump = () => {
+    if (!sb || sb.updating) return;
+    if (queue.length) sb.appendBuffer(queue.shift());
+    else if (finished && ms.readyState === "open") ms.endOfStream();
+  };
+
+  const ready = !live ? Promise.resolve() : new Promise((resolve) => {
+    ms = new MediaSource();
+    audio.src = URL.createObjectURL(ms);
+    ms.addEventListener("sourceopen", () => {
+      sb = ms.addSourceBuffer("audio/mpeg");
+      sb.addEventListener("updateend", pump);
+      resolve();
+    }, { once: true });
+  });
+
+  return {
+    live,
+    async push(bytes) {
+      await ready;
+      chunks.push(bytes);
+      received += bytes.length;
+      if (!live) return;
+      queue.push(bytes);
+      pump();
+      if (received >= PREBUFFER_BYTES) start();
+    },
+    /** Cierra el stream; devuelve el MP3 completo y cuándo empezó a sonar (ms desde t0, o null). */
+    async end() {
+      await ready;
+      finished = true;
+      const blob = new Blob(chunks, { type: "audio/mpeg" });
+      if (live) pump(); else audio.src = URL.createObjectURL(blob);
+      start();
+      return { blob, heard: await heard };
+    },
+  };
+}
+
+// ── Envío de una pregunta ────────────────────────────────────────────────────────────────────
+
+async function httpError(res) {
+  let detail = "";
+  try { detail = (await res.json()).detail; } catch { /* cuerpo no JSON */ }
+  return new Error(`HTTP ${res.status}${detail ? ": " + detail : ""}`);
+}
+
+/** Convierte lo grabado (o un archivo) a WAV, crea la tarjeta y lanza la petición. `t0` = instante en que se paró la grabación. */
+async function submit(blob, t0) {
+  const turn = newTurn(speaker, $("#mode").value);
+  turn.running(t0);
+  try {
+    const { wav, peak, seconds } = await toWav(blob);
+    turn.setQuestion(wav, seconds, peak);
+    await runTurn(turn, t0);
+  } catch (e) {
+    turn.fail(e.name === "EncodingError" ? "No se pudo leer ese audio" : e.message);
+  }
+}
+
+async function runTurn(turn, t0) {
+  const form = new FormData();
+  form.append("audio", turn.wav, "pregunta.wav");
+  form.append("speaker", turn.speaker);
+  form.append("response_file", `web_e2e_${turn.speaker}.mp3`); // no pisa el response_<speaker>.mp3 de Unity
+  const base = serverUrl();
+  turn.running(t0);
+
+  if (turn.mode === "full") {
+    const res = await fetch(`${base}/audio`, { method: "POST", body: form });
+    if (!res.ok) throw await httpError(res);
+    const body = await res.json();
+    const total = performance.now() - t0;
+    turn.setAnswer(body.transcript, body.result, body.timings);
+    turn.audio.src = turn.link.href = `${base}/static/${body.file}?t=${Date.now()}`;
+    turn.link.hidden = false;
+    turn.finish({ total, heard: await playAndTime(turn.audio, t0) });
+    return;
+  }
+
+  const res = await fetch(`${base}/audio/stream`, { method: "POST", body: form });
+  if (!res.ok) throw await httpError(res);
+  const player = createStreamPlayer(turn.audio, t0);
+  const arrivals = [];
+  const reader = res.body.getReader();
+  for (let r = await reader.read(); !r.done; r = await reader.read()) {
+    arrivals.push([(performance.now() - t0) / 1000, r.value.length]);
+    await player.push(r.value);
+  }
+  const total = performance.now() - t0;
+  const { blob, heard } = await player.end();
+  turn.link.href = URL.createObjectURL(blob);
+  turn.link.hidden = false;
+  // El servidor deja qué entendió el STT, el texto y sus tiempos junto al MP3, antes de cerrar el stream.
+  try {
+    const saved = await (await fetch(`${base}/static/web_e2e_${turn.speaker}.json?t=${Date.now()}`, { cache: "no-store" })).json();
+    turn.setAnswer(saved.transcript, saved.answer, saved.timings);
+  } catch { turn.setAnswer(null, null, null); }
+  // Sin streaming en el navegador el audio suena entero al final: esa hora no representa a Unity y no se usa.
+  turn.finish({ first: arrivals[0][0] * 1000, total, arrivals, live: player.live, heard: player.live ? heard : null });
+}
+
+// ── Tarjetas de resultado ────────────────────────────────────────────────────────────────────
+
+const stat = (value, label) => el("div", { className: "stat" }, el("b", { textContent: value }), el("span", { textContent: label }));
+
+function newTurn(who, mode) {
+  $("#none")?.remove();
+  const card = el("article", { className: "panel turn" });
+  card.innerHTML = `
+    <header><span class="who"></span><span class="tag"></span><span class="state"></span></header>
+    <div class="block"><h3>Tu pregunta</h3><audio controls preload="metadata" class="ask"></audio><p class="qmeta tag"></p></div>
+    <div class="block"><h3>Lo que entendió el STT</h3><p class="transcript empty">…</p></div>
+    <div class="block"><h3>Respuesta</h3><p class="answer empty">…</p><audio controls class="resp"></audio></div>
+    <div class="results" hidden></div>
+    <footer><button type="button" class="pill resend" disabled title="Vuelve a enviar este mismo audio con el personaje y el modo elegidos arriba">Reenviar esta pregunta</button><a class="btn" hidden>Descargar respuesta (.mp3)</a></footer>`;
+  $("#turns").prepend(card);
+  const q = (s) => card.querySelector(s);
+  const stateEl = q(".state");
+  q(".who").textContent = NAMES[who] || who;
+  q(".tag").textContent = `${clock()} · ${mode === "stream" ? "/audio/stream" : "/audio"}`;
+  q("a.btn").download = `respuesta_${who}.mp3`;
+
+  const turn = {
+    speaker: who, mode, wav: null, seconds: 0, peak: 0, transcript: null, server: null, ticker: 0,
+    audio: q("audio.resp"), link: q("a.btn"),
+
+    setQuestion(wav, seconds, peak) {
+      Object.assign(turn, { wav, seconds, peak });
+      q("audio.ask").src = URL.createObjectURL(wav);
+      const quiet = peak < 0.05;
+      q(".qmeta").textContent = `${seconds.toFixed(1)} s · pico ${Math.round(peak * 100)} %${quiet ? " · muy bajo: revisa el micrófono" : ""}`;
+      q(".resend").disabled = false;
+    },
+    running(t0) {
+      clearInterval(turn.ticker);
+      stateEl.className = "state busy";
+      turn.ticker = setInterval(() => { stateEl.textContent = `Procesando… ${((performance.now() - t0) / 1000).toFixed(1)} s`; }, 100);
+    },
+    setAnswer(transcript, answer, timings) {
+      const t = q(".transcript"), a = q(".answer");
+      if (transcript == null) { t.textContent = a.textContent = "(el servidor no dejó el detalle)"; t.className = a.className = "empty"; return; }
+      turn.transcript = transcript;
+      turn.server = timings && { ...timings, first_audio_total: timings.first_audio_total ?? (timings.first_audio != null ? timings.stt + timings.first_audio : null) };
+      t.textContent = transcript.trim() || "(vacío: no entendió nada)";
+      t.className = transcript.trim() ? "transcript" : "transcript empty";
+      a.textContent = answer;
+      a.className = "answer";
+    },
+    fail(msg) {
+      clearInterval(turn.ticker);
+      stateEl.className = "state err";
+      stateEl.textContent = "Error: " + msg;
+    },
+    finish(m) {
+      clearInterval(turn.ticker);
+      stateEl.className = "state done";
+      stateEl.textContent = "Listo";
+      renderResults(q(".results"), turn, m);
+    },
+  };
+  q(".resend").onclick = async () => {
+    const again = newTurn(speaker, $("#mode").value);
+    again.setQuestion(turn.wav, turn.seconds, turn.peak);
+    try { await runTurn(again, performance.now()); } catch (e) { again.fail(e.message); }
+  };
+  return turn;
+}
+
+function renderResults(box, turn, m) {
+  const { first, heard, total, arrivals, live } = m; // ms desde que se paró la grabación
+  const client = [];
+  if (first != null) client.push(stat(secs(first), "primer trozo de audio"));
+  if (heard != null) client.push(stat(secs(heard), "empieza a sonar"));
+  client.push(stat(secs(total), arrivals ? "stream completo" : "respuesta completa"));
+  if (arrivals) client.push(stat(`${arrivals.length} · ${Math.round(arrivals.reduce((n, a) => n + a[1], 0) / 1024)} KB`, "trozos · tamaño"));
+
+  const s = turn.server || {};
+  const server = [["stt", "STT"], ["llm_first_token", "LLM 1.er token"], ["llm_total", "LLM completo"], ["first_audio_total", "primer sonido"], ["first_answer_audio_total", "primer audio de la respuesta"], ["total", "total servidor"]]
+    .filter(([k]) => s[k] != null).map(([k, label]) => stat(s[k].toFixed(2) + " s", label));
+  if (s.fillers != null) server.push(stat(String(s.fillers), "muletillas"));
+
+  const checks = [];
+  if (turn.transcript != null && !turn.transcript.trim()) {
+    checks.push([false, "El STT no entendió nada y el servidor pidió repetir. Revisa el micrófono o el volumen."]);
+  }
+  const latency = heard ?? first ?? total;
+  if (s.fillers) {
+    // Con muletillas el primer sonido es la muletilla (segundo 2); lo que importa además es cuándo llega la respuesta real
+    const due = s.filler_start ?? 4;
+    checks.push([Math.abs(latency / 1000 - due) < 1, `Muletilla: suena a los ${(latency / 1000).toFixed(1)} s de parar la grabación (objetivo ≈ ${due.toFixed(0)} s: solo si la respuesta tarda más)`]);
+    if (s.first_answer_audio_total != null) {
+      checks.push([s.first_answer_audio_total < 6, `Respuesta: su primer audio llega a los ${s.first_answer_audio_total.toFixed(1)} s en el servidor (objetivo < 6 s)`]);
+    }
+  } else {
+    checks.push([latency / 1000 < FIRST_AUDIO_GOAL_S,
+      `Latencia: ${heard != null ? "suena" : "llega el primer audio"} a los ${(latency / 1000).toFixed(1)} s de parar la grabación (objetivo < ${FIRST_AUDIO_GOAL_S.toFixed(0)} s)`]);
+  }
+  if (arrivals) {
+    const g = playbackGaps(arrivals);
+    const slack = Number.isFinite(g.slack) ? `; margen mínimo ${g.slack.toFixed(1)} s` : "";
+    checks.push([g.gaps === 0 && g.slack > 0.3,
+      `Fluidez: ${g.gaps} cortes y ${g.silence.toFixed(1)} s de silencio con el colchón de ${PREBUFFER_BYTES} bytes de Unity${slack}`]);
+    if (!live) checks.push([false, "Este navegador no reproduce MP3 en streaming: la respuesta sonó entera al final, así que no se mide cuándo empieza a sonar."]);
+  }
+
+  const group = (text) => el("p", { className: "group", textContent: text });
+  const grid = (items) => el("div", { className: "grid" }, ...items);
+  const row = ([ok, text]) => {
+    const li = el("li", { className: ok ? "ok" : "warn" }, el("span", { textContent: text }));
+    li.insertAdjacentHTML("afterbegin", ok ? ICON.ok : ICON.warn);
+    return li;
+  };
+  const list = el("ul", { className: "checks" }, ...checks.map(row));
+  box.replaceChildren(group("Medido en el navegador"), grid(client), ...(server.length ? [group("Medido en el servidor"), grid(server)] : []), list);
+  box.hidden = false;
+}
+
+// ── Arranque ─────────────────────────────────────────────────────────────────────────────────
+
+$("#server").value = location.protocol.startsWith("http") ? location.origin : "http://localhost:5000";
+$("#server").addEventListener("change", checkHealth);
+$("#rec").innerHTML = ICON.mic;
+$("#rec").onclick = toggleRecording;
+$("#pick").onclick = () => $("#file").click();
+$("#file").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) submit(f, performance.now()); };
+$("#reset").onclick = async () => {
+  try { await fetch(serverUrl() + "/reset", { method: "POST" }); $("#conn").textContent = "Conversación olvidada"; setTimeout(checkHealth, 1500); }
+  catch { checkHealth(); }
+};
+renderSpeakers(Object.keys(NAMES));
+
+// Espacio graba/envía y Esc descarta, salvo mientras se escribe en un campo.
+const typing = (e) => /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
+document.addEventListener("keydown", (e) => {
+  if (typing(e)) return;
+  if (e.code === "Space") { e.preventDefault(); if (!e.repeat) toggleRecording(); }
+  else if (e.key === "Escape") stopRecording(true);
+});
+document.addEventListener("keyup", (e) => { if (e.code === "Space" && !typing(e)) e.preventDefault(); });
+
+checkHealth();
+setInterval(() => { if (!rec.recorder) checkHealth(); }, 15000);
+</script>
+</body>
+</html>

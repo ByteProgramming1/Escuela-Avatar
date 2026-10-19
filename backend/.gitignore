@@ -1,0 +1,17 @@
+.venv/
+.env
+__pycache__/
+.pytest_cache/
+static/
+static_fish/
+
+# Voces de referencia: datos personales, no se versionan
+# (static_fish/compare/ guarda una copia de la referencia: por eso también va ignorada)
+voices/*
+!voices/README.md
+
+# Grabaciones de prueba (voces de personas reales)
+audios-test/
+
+logs/
+*.log

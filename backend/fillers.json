@@ -1,0 +1,64 @@
+{
+  "_ayuda": "Muletillas que suenan mientras la respuesta real se prepara. 'opening' = la primera (segundo 2); 'continue' = las siguientes si la respuesta aún no está lista. Cada una debe durar ~4 s (10-13 palabras). Sin datos de la Escuela, sin saludos, sin preguntas. Al cambiar un texto se vuelve a generar solo; 'python -m scripts.check_fillers' mide la duración de cada una.",
+  "rectora": {
+    "opening": [
+      "Qué buena pregunta, déjeme pensar cómo explicarlo muy bien.",
+      "Con muchísimo gusto, déjeme organizar bien las ideas.",
+      "Me alegra que lo pregunte, es un tema muy importante.",
+      "Claro que sí, es justo lo que muchas familias preguntan.",
+      "Gracias por preguntarlo, permítame un instante para responder bien.",
+      "Muy bien, voy a ordenar la información para que todo quede claro.",
+      "Es un tema que nos importa mucho, déjeme explicarlo bien.",
+      "Con gusto lo conversamos, déjeme ordenar las ideas.",
+      "Excelente pregunta, voy a pensarla bien para responder.",
+      "Qué bueno que lo mencione, permítame un momento para explicarlo.",
+      "Entiendo la inquietud, déjeme pensar cómo aclararla.",
+      "Claro, con gusto, un momento mientras organizo mi respuesta.",
+      "Muchas gracias por la pregunta, voy a responderla muy bien.",
+      "Aquí estamos para resolver estas dudas, déjeme prepararme bien.",
+      "Me parece muy valioso que lo pregunte, déjeme pensar un momento."
+    ],
+    "continue": [
+      "Un momentico más, estoy terminando de organizar todo.",
+      "Gracias por la paciencia, ya casi tengo todo listo para responder.",
+      "Sigo ordenando las ideas, enseguida lo explico con detalle.",
+      "Un segundito más, quiero que quede bien clara.",
+      "Ya casi, estoy revisando que no falte ningún detalle.",
+      "Permítame un instante más, estoy armando la explicación.",
+      "Gracias por esperar un poquito, ya estoy lista para responder.",
+      "Un momento más, por favor, que esto es muy importante para mí.",
+      "Casi lo tengo, solo estoy afinando los últimos detalles.",
+      "Ya voy, estoy ordenando todo para explicarlo con claridad."
+    ]
+  },
+  "oswaldo": {
+    "opening": [
+      "Muy buena pregunta, vamos a verlo con calma para que quede bien claro.",
+      "Perfecto, déjeme recordar los detalles para responder con precisión.",
+      "Claro que sí, esto se explica mejor paso a paso, así que voy a organizarme.",
+      "Buena pregunta, permítame un momento para ordenar bien la explicación.",
+      "Con gusto, es un tema que conviene explicar bien, déjeme pensar cómo hacerlo.",
+      "Entiendo muy bien la duda, déjeme armar la explicación con mucho cuidado.",
+      "Excelente, vamos a revisarlo juntos, permítame un instante para prepararme.",
+      "Me encanta que pregunten esto, déjeme organizar las ideas para responder.",
+      "Muy bien, permítame ordenar la información para explicarlo de forma clara.",
+      "Claro, déjeme pensar un ejemplo concreto que ayude a entenderlo mejor.",
+      "Gracias por preguntar, voy a repasar los detalles para no omitir nada.",
+      "Vamos con eso, solo un momento mientras organizo la respuesta con precisión.",
+      "Perfecto, esta es de las preguntas que vale la pena responder con mucha calma.",
+      "Claro que sí, permítame ubicar los datos para responder con exactitud."
+    ],
+    "continue": [
+      "Un momentico más, estoy terminando de organizar toda la explicación.",
+      "Gracias por la paciencia, ya casi tengo todo listo para responderle bien.",
+      "Sigo repasando los detalles, enseguida lo explico con mucha precisión y calma.",
+      "Un segundito más, quiero que la respuesta quede completa, bien clara y fácil de entender.",
+      "Ya casi, estoy verificando que no se quede ningún dato importante por fuera.",
+      "Permítame un instante más, estoy armando la explicación paso a paso.",
+      "Gracias por esperar un poquito, ya estoy listo para responder con calma.",
+      "Un momento más, por favor, que esto vale la pena explicarlo con mucha calma.",
+      "Casi lo tengo, solo estoy afinando los últimos detalles de la respuesta.",
+      "Ya voy, estoy ordenando todo para que la explicación sea muy clara."
+    ]
+  }
+}

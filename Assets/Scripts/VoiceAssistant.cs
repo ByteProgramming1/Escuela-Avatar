@@ -8,6 +8,7 @@ using UnityEngine.Networking;
 /// Teclas:
 ///   W / Espacio → Graba audio del usuario → el avatar activo responde con IA
 ///   Tab         → Alterna tab activo: Rectora ↔ Oswaldo
+///   R           → Nueva familia: el servidor olvida la conversación anterior (POST /reset)
 ///   1-9         → Reproduce pregunta pregrabada del tab activo (pregunta 1-9)
 ///   0           → Reproduce pregunta 10 del tab activo
 /// </summary>
@@ -15,6 +16,14 @@ public class VoiceAssistant : MonoBehaviour
 {
     [Header("Servidor")]
     public string serverUrl = "http://localhost:5000";
+
+    [Tooltip("Reproduce la respuesta mientras el servidor aún la genera (POST /audio/stream). " +
+             "Desactívalo para volver a la descarga completa (POST /audio).")]
+    public bool useStreaming = true;
+    [Tooltip("Bytes que deben llegar antes de empezar a sonar. Con el MP3 de 48 kbps del servidor, " +
+             "6000 bytes ≈ 1 s de audio. Más = más margen contra cortes; menos = empieza antes. " +
+             "Las muletillas del servidor (~4 s ≈ 24000 bytes) lo superan de golpe, así que suenan nada más llegar.")]
+    public int streamPrebufferBytes = 7000;
 
     [Header("Avatar Rectora (682bca91f23c99d01dd49ed4)")]
     public AudioSource audioRectora;
@@ -32,6 +41,8 @@ public class VoiceAssistant : MonoBehaviour
     private bool rectoraResponde = true;
     private string micDevice;
     private AudioClip recordedClip;
+    // Instante en que se soltó la tecla: base de los cronómetros "⏱️" del log (cuánto tarda en sonar la respuesta)
+    private float releasedAt;
 
     [System.Serializable]
     class ServerResponse
@@ -49,7 +60,7 @@ public class VoiceAssistant : MonoBehaviour
         else
             Debug.LogError("❌ No hay micrófono disponible");
 
-        Debug.Log("Tab=Cambiar tab (Rectora/Oswaldo) | 0-9=Pregunta pregrabada | W/Espacio=Hablar");
+        Debug.Log("Tab=Cambiar tab (Rectora/Oswaldo) | R=Nueva familia | 0-9=Pregunta pregrabada | W/Espacio=Hablar");
     }
 
     void Update()
@@ -60,6 +71,10 @@ public class VoiceAssistant : MonoBehaviour
             rectoraResponde = !rectoraResponde;
             Debug.Log(rectoraResponde ? "📋 Tab: RECTORA" : "📋 Tab: OSWALDO");
         }
+
+        // R: nueva familia → el servidor olvida lo conversado (si no, la siguiente pregunta hereda el contexto)
+        if (Input.GetKeyDown(KeyCode.R))
+            StartCoroutine(ResetConversation());
 
         // W o Espacio: grabar audio del usuario → el avatar del tab activo responde
         bool startRec = Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.Space);
@@ -73,6 +88,7 @@ public class VoiceAssistant : MonoBehaviour
 
         if (stopRec && recordedClip != null)
         {
+            releasedAt = Time.realtimeSinceStartup;
             int len = Microphone.GetPosition(micDevice);
             Microphone.End(micDevice);
             if (len > 0)
@@ -119,6 +135,21 @@ public class VoiceAssistant : MonoBehaviour
         form.AddField("response_file", respFile);
 
         Debug.Log("⏳ Procesando audio...");
+
+        if (useStreaming)
+        {
+            StreamResult result = StreamResult.ServerError;
+            yield return StreamAndPlay(form, targetAudio, targetHandler, r => result = r);
+            if (result != StreamResult.NotPlayable)
+                yield break;
+
+            // El servidor respondió bien pero Unity no pudo reproducir el stream:
+            // el archivo completo ya quedó en /static, así que se descarga como antes.
+            Debug.LogWarning("⚠️ No se pudo reproducir en streaming; descargo el archivo completo.");
+            yield return DownloadAndPlay($"{serverUrl}/static/{respFile}", targetAudio, targetHandler);
+            yield break;
+        }
+
         using (var www = UnityWebRequest.Post($"{serverUrl}/audio", form))
         {
             yield return www.SendWebRequest();
@@ -131,6 +162,85 @@ public class VoiceAssistant : MonoBehaviour
             {
                 Debug.LogError($"❌ Error enviando audio: {www.error}");
             }
+        }
+    }
+
+    // ── Streaming: empieza a sonar mientras el servidor sigue generando ───────
+
+    enum StreamResult { Played, ServerError, NotPlayable }
+
+    IEnumerator StreamAndPlay(WWWForm form, AudioSource target, MonoBehaviour handler,
+        System.Action<StreamResult> done)
+    {
+        string url = $"{serverUrl}/audio/stream";
+        var audioHandler = new DownloadHandlerAudioClip(url, AudioType.MPEG) { streamAudio = true };
+
+        using (var www = UnityWebRequest.Post(url, form))
+        {
+            www.downloadHandler = audioHandler;
+            var op = www.SendWebRequest();
+
+            // 1) Esperar a que llegue un colchón de audio (o a que la petición termine)
+            while (!op.isDone && www.downloadedBytes < (ulong)streamPrebufferBytes)
+                yield return null;
+            Debug.Log($"⏱️ Llegó el colchón de audio ({www.downloadedBytes} bytes) a {Time.realtimeSinceStartup - releasedAt:F1}s de soltar la tecla");
+
+            if (www.result != UnityWebRequest.Result.Success &&
+                www.result != UnityWebRequest.Result.InProgress)
+            {
+                Debug.LogError($"❌ Error en streaming de audio: {www.error}");
+                done(StreamResult.ServerError);
+                yield break;
+            }
+
+            // 2) El clip en streaming puede tardar unos frames en existir
+            AudioClip streamClip = audioHandler.audioClip;
+            float giveUpAt = Time.realtimeSinceStartup + 3f;
+            while (streamClip == null && !op.isDone && Time.realtimeSinceStartup < giveUpAt)
+            {
+                yield return null;
+                streamClip = audioHandler.audioClip;
+            }
+
+            if (streamClip == null || target == null)
+            {
+                // Dejar que termine la petición: así el servidor completa y guarda el archivo
+                while (!op.isDone) yield return null;
+                done(www.result == UnityWebRequest.Result.Success
+                    ? StreamResult.NotPlayable : StreamResult.ServerError);
+                yield break;
+            }
+
+            // 3) Reproducir ya (mismo patrón que DownloadAndPlay) y seguir recibiendo
+            target.clip = streamClip;
+            target.Play();
+            if (handler != null)
+                handler.SendMessage("PlayAudioClip", streamClip, SendMessageOptions.DontRequireReceiver);
+            Debug.Log($"🔊 Reproduciendo en streaming en {target.gameObject.name} — suena a {Time.realtimeSinceStartup - releasedAt:F1}s de soltar la tecla");
+
+            while (!op.isDone) yield return null;
+            if (www.result != UnityWebRequest.Result.Success)
+                Debug.LogError($"❌ El streaming se cortó: {www.error}");
+
+            // El clip en streaming depende de la petición: no liberarla hasta que termine de sonar
+            while (target != null && target.isPlaying && target.clip == streamClip)
+                yield return null;
+
+            done(StreamResult.Played);
+        }
+    }
+
+    // ── R: nueva familia ───────────────────────────────────────────────────────
+
+    IEnumerator ResetConversation()
+    {
+        using (var www = UnityWebRequest.Post($"{serverUrl}/reset", new WWWForm()))
+        {
+            yield return www.SendWebRequest();
+            if (www.result == UnityWebRequest.Result.Success)
+                Debug.Log("🧹 Conversación reiniciada: el servidor olvidó lo anterior");
+            else
+                Debug.LogError($"❌ No se pudo reiniciar la conversación: {www.error}");
         }
     }
 

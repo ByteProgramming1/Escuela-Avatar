@@ -33,3 +33,6 @@ mono_crash.mem.*
 # OS
 .DS_Store
 Thumbs.db
+
+CLAUDE.md
+.env
