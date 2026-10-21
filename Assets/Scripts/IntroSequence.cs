@@ -45,6 +45,16 @@ public class IntroSequence : MonoBehaviour
     public float pauseBeforeCameraFace = 0.8f;
 
     private bool _started;
+    private Coroutine _introRoutine;
+    private UnityWebRequest _activeRequest;
+    private Camera _mainCam;
+
+    // ── Estado para la barra superior (BarraSuperior) ──────────────────────────
+    public bool Started => _started;
+    public bool Running { get; private set; }
+    public bool Finished { get; private set; }
+    /// <summary>Speaker de la línea que suena ahora ("oswaldo" / "rectora"), null entre líneas.</summary>
+    public string CurrentSpeaker { get; private set; }
 
     // Líneas 0-3: avatares mirándose entre sí
     // Líneas 4-7: ambos mirando a la cámara
@@ -94,16 +104,66 @@ public class IntroSequence : MonoBehaviour
     void Update()
     {
         if (!_started && Input.GetKeyDown(KeyCode.P))
+            StartIntro();
+    }
+
+    public void StartIntro()
+    {
+        if (_started) return;
+        _started = true;
+        Running = true;
+        _introRoutine = StartCoroutine(RunIntro());
+    }
+
+    /// <summary>Corta la intro (o la evita si no empezó) y deja la escena como al final: avatares en su sitio
+    /// mirando a la cámara, cámara principal activa y VoiceAssistant listo para preguntas.</summary>
+    public void SkipIntro()
+    {
+        if (Finished) return;
+        _started = true;
+        if (_introRoutine != null) StopCoroutine(_introRoutine);
+        _introRoutine = null;
+        if (_activeRequest != null)
         {
-            _started = true;
-            StartCoroutine(RunIntro());
+            _activeRequest.Abort();
+            _activeRequest.Dispose();
+            _activeRequest = null;
         }
+        if (audioOswaldo != null) audioOswaldo.Stop();
+        if (audioRectora != null) audioRectora.Stop();
+        CurrentSpeaker = null;
+
+        if (oswaldoWalk != null) { oswaldoWalk.SnapToEnd(); oswaldoWalk.enabled = false; }
+        if (rectoraWalk != null) { rectoraWalk.SnapToEnd(); rectoraWalk.enabled = false; }
+
+        if (_mainCam == null) _mainCam = Camera.main;
+        if (walkingCamera != null) walkingCamera.enabled = false;
+        if (_mainCam != null) _mainCam.enabled = true;
+
+        Transform cam = _mainCam != null ? _mainCam.transform : null;
+        if (cam != null)
+        {
+            if (oswaldoRoot != null) oswaldoRoot.rotation = GetFacing(oswaldoRoot, cam);
+            if (rectoraRoot != null) rectoraRoot.rotation = GetFacing(rectoraRoot, cam);
+        }
+
+        Debug.Log("⏭️ Intro saltada");
+        EndIntro();
+    }
+
+    void EndIntro()
+    {
+        Running = false;
+        Finished = true;
+        if (voiceAssistant != null)
+            voiceAssistant.enabled = true;
     }
 
     IEnumerator RunIntro()
     {
         bool hasWalk = oswaldoWalk != null || rectoraWalk != null;
         Camera mainCam = Camera.main;
+        _mainCam = mainCam;
 
         // ── Fase 0: Arrancar caminata y activar cámara de seguimiento ─────────
         if (hasWalk)
@@ -168,8 +228,8 @@ public class IntroSequence : MonoBehaviour
             yield return new WaitForSeconds(pauseBetweenLines);
         }
 
-        if (voiceAssistant != null)
-            voiceAssistant.enabled = true;
+        EndIntro();
+        _introRoutine = null;
 
         Debug.Log("✅ Intro terminada — VoiceAssistant activo");
     }
@@ -185,7 +245,9 @@ public class IntroSequence : MonoBehaviour
         {
             using (var head = UnityWebRequest.Head(fileUrl))
             {
+                _activeRequest = head;
                 yield return head.SendWebRequest();
+                _activeRequest = null;
                 needsTts = head.result != UnityWebRequest.Result.Success;
             }
         }
@@ -202,7 +264,9 @@ public class IntroSequence : MonoBehaviour
                 www.uploadHandler   = new UploadHandlerRaw(body);
                 www.downloadHandler = new DownloadHandlerBuffer();
                 www.SetRequestHeader("Content-Type", "application/json");
+                _activeRequest = www;
                 yield return www.SendWebRequest();
+                _activeRequest = null;
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
@@ -219,7 +283,9 @@ public class IntroSequence : MonoBehaviour
 
         using (var www = UnityWebRequestMultimedia.GetAudioClip(playUrl, AudioType.MPEG))
         {
+            _activeRequest = www;
             yield return www.SendWebRequest();
+            _activeRequest = null;
 
             if (www.result != UnityWebRequest.Result.Success)
             {
@@ -230,6 +296,8 @@ public class IntroSequence : MonoBehaviour
             AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
             if (clip == null || clip.length <= 0)
                 yield break;
+
+            CurrentSpeaker = Speakers[index];
 
             // Reproducir audio (siempre)
             if (targetAudio != null)
@@ -245,6 +313,7 @@ public class IntroSequence : MonoBehaviour
             // Un frame para que isPlaying sea true
             yield return null;
             yield return new WaitWhile(() => targetAudio != null && targetAudio.isPlaying);
+            CurrentSpeaker = null;
         }
     }
 

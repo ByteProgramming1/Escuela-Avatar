@@ -151,6 +151,16 @@ public class WalkToPoint : MonoBehaviour
         }
     }
 
+    /// <summary>Salta al final de la caminata (saltar la intro): queda en el destino, quieto.</summary>
+    public void SnapToEnd()
+    {
+        if (targetPoint != null)
+            transform.position = new Vector3(targetPoint.position.x, _lockedY, targetPoint.position.z);
+        _walking = false;
+        _turning = false;
+        SetWalking(false);
+    }
+
     private void SetWalking(bool value)
     {
         if (_animator != null && _animator.isInitialized && _hasIsWalkingParam)
